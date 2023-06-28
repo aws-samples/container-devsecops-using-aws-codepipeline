@@ -1,11 +1,6 @@
 ## My Project
 
-TODO: Fill this README out!
-
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+Solution linked to this AWS [blog](https://aws.amazon.com/blogs/containers/container-devsecops-with-aws-codepipeline-using-hadolint-and-anchore-engine/)
 
 ## Security
 

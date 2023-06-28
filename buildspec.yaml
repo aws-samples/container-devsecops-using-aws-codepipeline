@@ -1,0 +1,38 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - echo "DOCKER FILE LINT STATGE"
+      - echo "PRE_BUILD Phase Will fail if Dockerfile is not secure or linted"
+      - echo Using Hadolint for Dockerfile linting
+      - docker pull hadolint/hadolint:v1.16.2
+      - docker run --rm -i -v ${PWD}/.hadolint.yml:/.hadolint.yaml hadolint/hadolint:v1.16.2   hadolint -f json - < ./Dockerfile
+      - echo DOCKER FILE LINT STATGE - PASSED
+      - ECR_LOGIN=$(aws ecr get-login --region $AWS_DEFAULT_REGION --no-include-email)
+      - echo Logging in to Amazon ECR...
+      - $ECR_LOGIN
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - PASSWORD=`echo $ECR_LOGIN | cut -d' ' -f6`
+      
+  build:
+    commands:
+      - echo "BUILD IMAGE & PUSH TO ECR"
+      - docker build -f Dockerfile -t $ECR_REPOSITORY_URI:latest .
+      - docker tag $ECR_REPOSITORY_URI:latest $ECR_REPOSITORY_URI:$IMAGE_TAG
+      - docker history --no-trunc $ECR_REPOSITORY_URI:$IMAGE_TAG
+  post_build:
+    commands:
+      - bash -c "if [ /"$CODEBUILD_BUILD_SUCCEEDING/" == /"0/" ]; then exit 1; fi"
+      - echo Build completed on `date`
+      - echo Pushing the Docker images...
+      - docker push $ECR_REPOSITORY_URI:latest
+      - docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+      - echo "Deep Vulnerability Scan ANCHORE"
+      - echo "POST_BUILD Phase Will fail if Container fails with Vulnerabilities"
+      - export COMPOSE_INTERACTIVE_NO_CLI=1
+      - curl -s https://ci-tools.anchore.io/inline_scan-v0.3.3 | bash -s -- $ECR_REPOSITORY_URI
+      - echo Writing image definitions file...
+      - printf '[{"name":"MyWebsite","imageUri":"%s"}]' $ECR_REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+artifacts:
+  files: imagedefinitions.json
